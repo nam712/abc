@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16
+    container_name: productshop-db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: sa
+      POSTGRES_DB: productshopdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  api:
+    build:
+      context: ./backend
+    container_name: productshop-api
+    restart: always
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=productshopdb;Username=postgres;Password=sa"
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
+volumes:
+  db_data:
+
+networks:
+  app-network:
