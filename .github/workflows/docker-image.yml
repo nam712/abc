@@ -39,7 +39,7 @@ jobs:
       - name: Build check (Không push)
         run: |
           echo "Build thử Docker images để kiểm tra lỗi cú pháp Dockerfile..."
-          docker build -t temp-api ./backend
+          docker build -t temp-api ./backend/backend
           docker build -t temp-frontend ./frontend
 
   ######################################################
@@ -64,7 +64,7 @@ jobs:
 
       - name: Build and Push Images
         run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev ./backend
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev ./backend/backend
           docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev
           
           docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:dev ./frontend
@@ -105,7 +105,7 @@ jobs:
         run: |
           COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
           
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./backend
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./backend/backend
           docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest
           docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT}
 
