@@ -66,8 +66,8 @@ jobs:
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             export DB_HOST=${{ secrets.STAGING_DB_HOST }}
             export DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
-            docker compose pull
-            docker compose up -d --remove-orphans
+            docker-compose pull
+            docker-compose up -d --remove-orphans
 
   ######################################################
   # 3️⃣ PRODUCTION - DEPLOY LÊN EC2 KHI PUSH MAIN
@@ -102,5 +102,5 @@ jobs:
             export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
             export DB_HOST=${{ secrets.PROD_DB_HOST }}
             export DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
-            docker compose pull
-            docker compose up -d --remove-orphans
+            docker-compose pull
+            docker-compose up -d --remove-orphans
