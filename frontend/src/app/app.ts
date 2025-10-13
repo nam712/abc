@@ -11,7 +11,7 @@ import { inject } from '@angular/core';
   template: `
     <div style="max-width:800px;margin:auto;padding:16px">
       <h2>Products</h2>
-      <div *ngIf="products().length === 0">No products alreagdy use!!bfbfc333 22</div>
+      <div *ngIf="products().length === 0">No products</div>
       <ul>
         <li *ngFor="let p of products()">
           {{p.name}} — {{p.price | number:'1.0-2'}} —

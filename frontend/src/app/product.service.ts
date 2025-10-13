@@ -12,7 +12,7 @@ export interface Product {
 
 @Injectable({ providedIn: 'root' })
 export class ProductService {
-  private api = 'http://localhost:8080/api/products'; // đổi theo backend url
+  private api = 'http://13.229.98.12:8080/api/products'; // đổi theo backend url
 
   constructor(private http: HttpClient) {}
 
