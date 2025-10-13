@@ -1,4 +1,4 @@
-name: CI/CD Docker to GCP
+name: CI/CD Docker to VM with Cloud SQL
 
 on:
   push:
@@ -7,23 +7,16 @@ on:
       - dev
   pull_request:
     branches:
-      - dev
+      - dev  # chạy test khi có PR vào dev
 
 env:
-  # GCP
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  GCP_REGION: asia-southeast1
-  API_SERVICE_NAME: productshop-api
-  FRONTEND_SERVICE_NAME: productshop-frontend
-
-  # Docker Hub
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   API_IMAGE_NAME: productshop-api
   FRONTEND_IMAGE_NAME: productshop-frontend
 
 jobs:
   ######################################################
-  # JOB 1: CHẠY TEST TRÊN PULL REQUEST VÀO `dev`
+  # 1️⃣ TEST - CHẠY TRÊN PULL REQUEST VÀO DEV
   ######################################################
   run-tests:
     name: Build and Run Tests
@@ -33,25 +26,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Unit Tests
-        run: echo "Chạy unit test ở đây... Nếu thất bại, pipeline sẽ dừng."
+      - name: Restore dependencies
+        run: dotnet restore ./backend
 
-      - name: Build check (Không push)
+      - name: Run Unit Tests
+        run: dotnet test ./backend --no-build --verbosity normal
+
+      - name: Docker syntax check
         run: |
-          echo "Build thử Docker images để kiểm tra lỗi cú pháp Dockerfile..."
-          docker build -t temp-api ./backend/backend
+          docker build -t temp-api ./backend
           docker build -t temp-frontend ./frontend
 
   ######################################################
-  # JOB 2: BUILD & DEPLOY LÊN MÔI TRƯỜNG STAGING (DEV)
+  # 2️⃣ STAGING - DEPLOY LÊN VM KHI PUSH NHÁNH DEV
   ######################################################
-  deploy-to-staging:
-    name: Build and Deploy to Staging
-    if: github.event_name == 'push' && github.ref_name == 'dev'
+  deploy-staging:
+    name: Build & Deploy to Staging (VM)
+    if: github.ref_name == 'dev'
     runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-      id-token: 'write' # Tạm thời không cần nhưng để lại cho sau này
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,35 +54,35 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Images
+      - name: Build and Push Staging Images
         run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev ./backend/backend
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev ./backend
           docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev
-          
           docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:dev ./frontend
           docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:dev
 
-      # --- PHẦN NÀY ĐÃ ĐƯỢC CHỈNH SỬA ---
-      - name: Simulate Deploy to Staging
-        run: |
-          echo "---------------------------------------------------------"
-          echo "✅ MÔ PHỎNG: Triển khai lên môi trường Staging thành công!"
-          echo "Tên dịch vụ API: ${{ env.API_SERVICE_NAME }}-staging"
-          echo "Tên dịch vụ Frontend: ${{ env.FRONTEND_SERVICE_NAME }}-staging"
-          echo "Image được deploy: ...:dev"
-          echo "---------------------------------------------------------"
+      - name: Deploy to Staging VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_STAGING_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd /home/${{ secrets.VM_USER }}/productshop
+            echo "${{ secrets.GCP_SA_KEY }}" > gcp_sa_key.json
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            export DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
+            export CLOUD_SQL_CONNECTION_NAME=${{ secrets.STAGING_CLOUD_SQL_CONNECTION_NAME }}
+            docker compose pull
+            docker compose up -d --remove-orphans
 
   ######################################################
-  # JOB 3: BUILD & DEPLOY LÊN MÔI TRƯỜNG PRODUCTION
+  # 3️⃣ PRODUCTION - DEPLOY LÊN VM KHI PUSH MAIN
   ######################################################
-  deploy-to-production:
-    name: Build and Deploy to Production
-    if: github.event_name == 'push' && github.ref_name == 'main'
+  deploy-production:
+    name: Build & Deploy to Production (VM)
+    if: github.ref_name == 'main'
     runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      contents: 'read'
-      id-token: 'write' # Tạm thời không cần nhưng để lại cho sau này
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,27 +93,25 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Images with Immutable Tag
+      - name: Build and Push Production Images
         run: |
           COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
-          
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./backend/backend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT}
-
+          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./backend
+          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }} --all-tags
           docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./frontend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${COMMIT_SHA_SHORT}
-          
-          # Lưu mã commit vào biến môi trường để bước sau có thể dùng
-          echo "COMMIT_SHA_SHORT=${COMMIT_SHA_SHORT}" >> $GITHUB_ENV
+          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }} --all-tags
 
-      # --- PHẦN NÀY ĐÃ ĐƯỢC CHỈNH SỬA ---
-      - name: Simulate Deploy to Production
-        run: |
-          echo "---------------------------------------------------------"
-          echo "🚀 MÔ PHỎNG: Triển khai lên môi trường PRODUCTION thành công!"
-          echo "Tên dịch vụ API: ${{ env.API_SERVICE_NAME }}"
-          echo "Tên dịch vụ Frontend: ${{ env.FRONTEND_SERVICE_NAME }}"
-          echo "Image được deploy: ...:${{ env.COMMIT_SHA_SHORT }}"
-          echo "---------------------------------------------------------"
+      - name: Deploy to Production VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_PROD_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            cd /home/${{ secrets.VM_USER }}/productshop
+            echo "${{ secrets.GCP_SA_KEY }}" > gcp_sa_key.json
+            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+            export DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
+            export CLOUD_SQL_CONNECTION_NAME=${{ secrets.PROD_CLOUD_SQL_CONNECTION_NAME }}
+            docker compose pull
+            docker compose up -d --remove-orphans
