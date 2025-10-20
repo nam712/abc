@@ -32,7 +32,7 @@ jobs:
           docker build -t temp-api ./backend/backend
           docker build -t temp-frontend ./frontend
 
-   2️⃣ STAGING - DEPLOY LÊN EC2 KHI PUSH NHÁNH DEV
+   # 2 STAGING - DEPLOY LÊN EC2 KHI PUSH NHÁNH DEV
   deploy-staging:
     name: Build & Deploy to Staging (EC2)
     if: github.ref_name == 'dev'
