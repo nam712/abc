@@ -7,7 +7,7 @@ on:
       - dev
   pull_request:
     branches:
-      - dev  # chạy test khi có PR vào dev
+      - dev  
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -15,9 +15,7 @@ env:
   FRONTEND_IMAGE_NAME: productshop-frontend
 
 jobs:
-  ######################################################
-  # 1️⃣ TEST - CHẠY TRÊN PULL REQUEST VÀO DEV
-  ######################################################
+  # 1️ TEST - CHẠY TRÊN PULL REQUEST VÀO DEV
   run-tests:
     name: Build and Run Tests
     if: github.event_name == 'pull_request'
@@ -34,9 +32,7 @@ jobs:
           docker build -t temp-api ./backend/backend
           docker build -t temp-frontend ./frontend
 
-  ######################################################
-  # 2️⃣ STAGING - DEPLOY LÊN EC2 KHI PUSH NHÁNH DEV
-  ######################################################
+   2️⃣ STAGING - DEPLOY LÊN EC2 KHI PUSH NHÁNH DEV
   deploy-staging:
     name: Build & Deploy to Staging (EC2)
     if: github.ref_name == 'dev'
@@ -69,9 +65,7 @@ jobs:
             docker-compose pull
             docker-compose up -d --remove-orphans
 
-  ######################################################
-  # 3️⃣ PRODUCTION - DEPLOY LÊN EC2 KHI PUSH MAIN
-  ######################################################
+  # 3️ PRODUCTION - DEPLOY LÊN EC2 KHI PUSH MAIN
   deploy-production:
     name: Build & Deploy to Production (EC2)
     if: github.ref_name == 'main'
