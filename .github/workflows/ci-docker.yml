@@ -1,100 +1,18 @@
-name: CI/CD Docker to AWS EC2
-
-on:
-  push:
-    branches:
-      - main
-      - dev
-  pull_request:
-    branches:
-      - dev  
-
-env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  API_IMAGE_NAME: productshop-api
-  FRONTEND_IMAGE_NAME: productshop-frontend
-
 jobs:
-  # 1️ TEST - CHẠY TRÊN PULL REQUEST VÀO DEV
-  run-tests:
-    name: Build and Run Tests
-    if: github.event_name == 'pull_request'
+  deploy:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write 
+      contents: read  
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Restore dependencies
-        run: dotnet restore ./backend/backend
-      - name: Run Unit Tests
-        run: dotnet test ./backend/backend --no-build --verbosity normal
-      - name: Docker syntax check
-        run: |
-          docker build -t temp-api ./backend/backend
-          docker build -t temp-frontend ./frontend
+        uses: actions/checkout@v3
 
-   # 2 STAGING - DEPLOY LÊN EC2 KHI PUSH NHÁNH DEV
-  deploy-staging:
-    name: Build & Deploy to Staging (EC2)
-    if: github.ref_name == 'dev'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Docker login
-        uses: docker/login-action@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Staging Images
-        run: |
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev ./backend/backend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:dev
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:dev ./frontend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:dev
-      - name: Deploy to Staging EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AWS_EC2_STAGING_HOST }}
-          username: ec2-user
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            cd ~/productshop
-            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            export DB_HOST=${{ secrets.STAGING_DB_HOST }}
-            export DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
-            docker-compose pull
-            docker-compose up -d --remove-orphans
+          role-to-assume: arn:aws:iam::474668406667:role/GitHubAction-Deploy-Role
+          aws-region: ap-southeast-1
 
-  # 3️ PRODUCTION - DEPLOY LÊN EC2 KHI PUSH MAIN
-  deploy-production:
-    name: Build & Deploy to Production (EC2)
-    if: github.ref_name == 'main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Docker login
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and Push Production Images
-        run: |
-          COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./backend/backend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.API_IMAGE_NAME }} --all-tags
-          docker build -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:latest -t ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }}:${COMMIT_SHA_SHORT} ./frontend
-          docker push ${{ env.DOCKERHUB_USERNAME }}/${{ env.FRONTEND_IMAGE_NAME }} --all-tags
-      - name: Deploy to Production EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.AWS_EC2_PROD_HOST }}
-          username: ec2-user
-          key: ${{ secrets.AWS_EC2_SSH_KEY }}
-          script: |
-            cd ~/productshop
-            export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
-            export DB_HOST=${{ secrets.PROD_DB_HOST }}
-            export DB_PASSWORD=${{ secrets.PROD_DB_PASSWORD }}
-            docker-compose pull
-            docker-compose up -d --remove-orphans
+      - name: Test AWS Access
+        run: aws s3 ls # Thử nghiệm xem đã connect được chưa
